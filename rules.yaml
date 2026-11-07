@@ -47,7 +47,7 @@ roles:
   san_storage:
     kind: leaf
     ports:
-      mgmt_hw: 1        # port mgmt cua storage array
+      mgmt_hw: 2        # port mgmt cua storage array: 1 port/controller x 2 controller (dual-controller)
       controller_port: 4  # tong port front-end ca 2 controller (VD: 2 port/controller x 2 controller),
                            # se duoc chia deu cho SAN-SW1/SAN-SW2 (moi fabric thay ca 2 controller)
 

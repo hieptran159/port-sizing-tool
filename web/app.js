@@ -1329,7 +1329,7 @@ function runSelfTest() {
     assertEq("network_switch.total_ports_per_unit", results.network_switch.total_ports_per_unit, 9);
     assertEq("network_switch.physical_units", results.network_switch.physical_units, 2);
     assertEq("mgmt_switch.total_ports_per_unit", results.mgmt_switch.total_ports_per_unit, 5);
-    assertEq("mgmt_switch.warnings.length", results.mgmt_switch.warnings.length, 1);
+    assertEq("mgmt_switch.warnings.length (storage mgmt_hw=2 -> tong 6 chan)", results.mgmt_switch.warnings.length, 0);
     assertEq("san_switch.total_ports_per_unit", results.san_switch.total_ports_per_unit, 4);
     assertEq("server.ports", results.server.ports, { mgmt_hw: 2, mgmt_os: 2, data: 4, iscsi_data: 4 });
 

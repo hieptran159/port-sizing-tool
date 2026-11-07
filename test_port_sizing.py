@@ -30,7 +30,7 @@ class TestDefaultRules(unittest.TestCase):
         results = compute(self.rules, inventory)
 
         # 2 server iscsi (dell_r660): mgmt_hw=2, mgmt_os=2, data=4, iscsi_data=4
-        # 1 san_storage: mgmt_hw=1, controller_port=4
+        # 1 san_storage: mgmt_hw=2 (1/controller), controller_port=4
 
         # network_switch nhan: server.data (4) + server.iscsi_data (4) = 8
         net = results["network_switch"]
@@ -41,14 +41,14 @@ class TestDefaultRules(unittest.TestCase):
         self.assertEqual(net.physical_units, 2)
         self.assertEqual(net.warnings, [])
 
-        # mgmt_switch nhan: server.mgmt_hw(2) + server.mgmt_os(2) + storage.mgmt_hw(1) = 5 (so le)
+        # mgmt_switch nhan: server.mgmt_hw(2) + server.mgmt_os(2) + storage.mgmt_hw(2) = 6 (chan)
         mgmt = results["mgmt_switch"]
         self.assertIsInstance(mgmt, PairResult)
-        self.assertEqual(mgmt.downlink_ports_per_unit, 4)  # ceil(5/2)=3, spare20% -> ceil(3.6)=4
+        self.assertEqual(mgmt.downlink_ports_per_unit, 4)  # 6/2=3, spare20% -> ceil(3.6)=4
         self.assertEqual(mgmt.own_ports_per_unit, 1)  # uplink=1
         self.assertEqual(mgmt.total_ports_per_unit, 5)
         self.assertEqual(mgmt.physical_units, 2)
-        self.assertEqual(len(mgmt.warnings), 1)  # 5 la so le -> canh bao
+        self.assertEqual(mgmt.warnings, [])  # 6 chan -> khong canh bao (so le da test o TestSplitLogic)
 
         # san_switch nhan: storage.controller_port(4) (khong co fc trong inventory -> fc_hba khong tinh)
         san = results["san_switch"]
@@ -60,7 +60,7 @@ class TestDefaultRules(unittest.TestCase):
 
         # server / san_storage la leaf, tra ve dict port tho
         self.assertEqual(results["server"], {"mgmt_hw": 2, "mgmt_os": 2, "data": 4, "iscsi_data": 4})
-        self.assertEqual(results["san_storage"], {"mgmt_hw": 1, "controller_port": 4})
+        self.assertEqual(results["san_storage"], {"mgmt_hw": 2, "controller_port": 4})
 
     def test_server_models_used_for_audit_trail(self) -> None:
         inventory = load_inventory(HERE / "example_inventory.yaml")
