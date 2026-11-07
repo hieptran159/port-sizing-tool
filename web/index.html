@@ -1,0 +1,780 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tính Port Hạ Tầng</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f6fa;
+    --panel: #ffffff;
+    --ink: #1f2937;
+    --ink-soft: #6b7280;
+    --line: #e5e7eb;
+    --line-strong: #d1d5db;
+    --primary: #2563eb;
+    --primary-soft: #eff4ff;
+    --primary-ink: #1d4ed8;
+    --ok: #15803d;      --ok-bg: #ecfdf3;   --ok-line: #bbf7d0;
+    --warn: #b45309;    --warn-bg: #fffbeb; --warn-line: #fde68a;
+    --err: #b91c1c;     --err-bg: #fef2f2;  --err-line: #fecaca;
+    --radius: 12px;
+    --shadow: 0 1px 2px rgba(16,24,40,.05), 0 1px 3px rgba(16,24,40,.06);
+    --sans: "Be Vietnam Pro", system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: var(--sans); color: var(--ink); background: var(--bg); font-size: 15px; line-height: 1.55; }
+
+  /* ---- khung: thanh menu trái + vùng làm việc ---- */
+  .app-shell { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+  .sidebar { background: var(--panel); border-right: 1px solid var(--line); padding: 1.25rem .9rem;
+    display: flex; flex-direction: column; gap: 1.25rem; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+  .brand { display: flex; align-items: center; gap: .65rem; padding: 0 .4rem; }
+  .brand-mark { width: 36px; height: 36px; border-radius: 10px; background: var(--primary); color: #fff;
+    display: grid; place-items: center; flex-shrink: 0; }
+  .brand-title { font-weight: 700; font-size: 1rem; }
+  .brand-sub { font-size: .75rem; color: var(--ink-soft); }
+  nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav-group { font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--ink-soft); padding: .9rem .7rem .3rem; }
+  nav button { all: unset; cursor: pointer; padding: .55rem .75rem; border-radius: 8px; font-size: .92rem;
+    color: var(--ink); display: block; }
+  nav button:hover { background: var(--bg); }
+  nav button.active { background: var(--primary-soft); color: var(--primary-ink); font-weight: 600; }
+  .sidebar-foot { margin-top: auto; font-size: .75rem; color: var(--ink-soft); padding: 0 .4rem; }
+  .workspace { padding: 2rem 2.5rem 4rem; max-width: 1120px; width: 100%; min-width: 0; }
+
+  section { display: none; }
+  section.active { display: block; }
+
+  .page-head { margin-bottom: 1.25rem; }
+  .page-head h1 { font-size: 1.5rem; font-weight: 700; margin: 0 0 .25rem; }
+  .page-head p { margin: 0; color: var(--ink-soft); max-width: 70ch; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1.25rem 1.4rem; margin-bottom: 1.1rem; }
+  .card > h2:first-child, .card > .card-head:first-child { margin-top: 0; }
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin-bottom: 1.1rem; }
+  .card-grid .card { margin-bottom: 0; }
+
+  h2 { font-size: 1.05rem; font-weight: 600; margin: 1.5rem 0 .6rem; }
+  h3 { font-size: .95rem; font-weight: 600; margin: 1rem 0 .5rem; }
+  .muted, p.muted { color: var(--ink-soft); font-size: .88rem; }
+  a { color: var(--primary); }
+  code { background: var(--bg); padding: .05rem .35rem; border-radius: 4px; font-size: .85em; }
+
+  /* ---- form ---- */
+  .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: .85rem 1rem; }
+  .form-grid .wide { grid-column: 1 / -1; }
+  .field { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; font-weight: 500; }
+  .field small { font-weight: 400; color: var(--ink-soft); }
+  .check { display: inline-flex; align-items: center; gap: .45rem; font-size: .88rem; cursor: pointer; }
+  input[type=text], input[type=number], select, textarea {
+    font: inherit; font-size: .92rem; color: var(--ink); background: var(--panel);
+    border: 1px solid var(--line-strong); border-radius: 8px; padding: .5rem .65rem; width: 100%; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,.15); }
+  input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--primary); }
+  input[type=file] { font: inherit; font-size: .88rem; max-width: 100%; }
+  textarea { font-family: var(--mono); font-size: .82rem; line-height: 1.5; }
+
+  /* ---- nút ---- */
+  button { font: inherit; font-size: .88rem; font-weight: 500; cursor: pointer; padding: .5rem 1rem;
+    border-radius: 8px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); }
+  button:hover { background: var(--bg); border-color: var(--ink-soft); }
+  button.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  button.primary:hover { background: var(--primary-ink); border-color: var(--primary-ink); }
+  button.danger { color: var(--err); border-color: transparent; background: transparent; padding: .25rem .5rem; }
+  button.danger:hover { background: var(--err-bg); }
+  .actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-top: 1rem; }
+  .actions.tight { margin-top: .5rem; }
+
+  /* ---- bảng ---- */
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0 1rem; background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  th, td { padding: .55rem .75rem; text-align: left; font-size: .88rem; vertical-align: middle; border-bottom: 1px solid var(--line); }
+  th { background: #f9fafb; font-weight: 600; font-size: .8rem; color: var(--ink-soft); }
+  tr:last-child td { border-bottom: none; }
+  td { font-variant-numeric: tabular-nums; }
+  td a { overflow-wrap: anywhere; }
+  td input, td select { padding: .35rem .5rem; }
+  td select { width: auto; min-width: 5.5rem; }
+
+  /* ---- thông báo ---- */
+  .err, .ok-msg, .warn, p.warn { padding: .65rem .85rem; border-radius: 8px; font-size: .88rem; margin: .6rem 0; white-space: pre-wrap; border: 1px solid; }
+  .err { color: var(--err); background: var(--err-bg); border-color: var(--err-line); }
+  .ok-msg { color: var(--ok); background: var(--ok-bg); border-color: var(--ok-line); }
+  .warn, p.warn { display: block; color: var(--warn); background: var(--warn-bg); border-color: var(--warn-line); }
+  td.warn { border-radius: 0; border-width: 0 0 1px 0; }
+  .hint { background: var(--primary-soft); color: var(--primary-ink); border-radius: 8px; padding: .65rem .85rem; font-size: .88rem; margin: .6rem 0; }
+
+  .badge-ok, .badge-unresolved { display: inline-block; font-size: .75rem; font-weight: 600; padding: .15rem .55rem; border-radius: 999px; white-space: nowrap; }
+  .badge-ok { color: var(--ok); background: var(--ok-bg); }
+  .badge-unresolved { color: var(--warn); background: var(--warn-bg); }
+
+  /* ---- kết quả tính port ---- */
+  .result-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .85rem; margin: .75rem 0 1rem; }
+  .result-card { border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem; background: var(--panel); }
+  .result-card.pair { border-top: 3px solid var(--primary); }
+  .result-card.leaf { border-top: 3px solid var(--ok); }
+  .result-card h3 { margin: 0 0 .15rem; font-size: .95rem; }
+  .result-card .kind { font-size: .75rem; color: var(--ink-soft); }
+  .result-card .big { font-size: 1.6rem; font-weight: 700; margin: .4rem 0 .1rem; }
+  .result-card .big small { font-size: .85rem; font-weight: 500; color: var(--ink-soft); }
+  .result-card dl { display: grid; grid-template-columns: 1fr auto; gap: .2rem .75rem; margin: .5rem 0 0; font-size: .85rem; }
+  .result-card dt { color: var(--ink-soft); }
+  .result-card dd { margin: 0; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: .85rem; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem; }
+  .stat b { display: block; font-size: 1.5rem; }
+  .stat span { font-size: .82rem; color: var(--ink-soft); }
+
+  .steps { margin: .25rem 0 0; padding-left: 1.2rem; }
+  .steps li { margin: .35rem 0; }
+
+  .bom-filter { background: var(--bg); border-radius: 10px; padding: .75rem .9rem; margin: .5rem 0 1rem; font-size: .88rem; }
+  .bom-filter .actions { margin: .4rem 0 .6rem; }
+  .bom-filter label { display: inline-flex; align-items: center; gap: .35rem; margin: .25rem 1rem .25rem 0; cursor: pointer; }
+
+  .rack-grid { width: auto; border: none; background: transparent; border-collapse: separate; border-spacing: 6px; }
+  .rack-grid td { border: 2px solid var(--ink-soft); border-radius: 6px; background: var(--panel); text-align: center;
+    min-width: 3.6rem; padding: 1.1rem .4rem; font-weight: 600; }
+  .rack-grid td.aisle { border: 1px dashed var(--line-strong); background: transparent; padding: .25rem; font-weight: 400; font-size: .75rem; }
+
+  details.selftest summary { cursor: pointer; font-weight: 600; }
+  #selftest pre { font-family: var(--mono); font-size: .78rem; white-space: pre-wrap; background: var(--bg);
+    border-radius: 8px; padding: .75rem; max-height: 360px; overflow: auto; }
+
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  @media (prefers-reduced-motion: no-preference) { button, nav button { transition: background-color .12s, border-color .12s; } }
+  @media (max-width: 800px) {
+    .app-shell { grid-template-columns: 1fr; }
+    .sidebar { position: static; height: auto; flex-direction: row; align-items: center; overflow-x: auto; padding: .6rem 1rem; gap: .75rem; }
+    nav { flex-direction: row; }
+    nav button { white-space: nowrap; }
+    .nav-group, .sidebar-foot, .brand-sub, .brand-title { display: none; }
+    .workspace { padding: 1.25rem 1rem 3rem; }
+  }
+</style>
+</head>
+<body>
+<div class="app-shell">
+<aside class="sidebar">
+  <div class="brand">
+    <div class="brand-mark">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="3" y="7" width="18" height="11" rx="2" stroke="currentColor" stroke-width="2"/>
+        <path d="M8 7V3M12 7V3M16 7V3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div>
+      <div class="brand-title">Tính Port Hạ Tầng</div>
+      <div class="brand-sub">Máy chủ · Switch · SAN</div>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-group">Bắt đầu</div>
+    <button data-tab="dashboard" class="active">Tổng quan</button>
+    <button data-tab="generate">Tạo nhanh</button>
+    <button data-tab="cabling">Cáp &amp; tủ rack</button>
+    <div class="nav-group">Tính chi tiết</div>
+    <button data-tab="inventory">Danh sách thiết bị</button>
+    <button data-tab="scanbom">Đọc file BOM</button>
+    <button data-tab="size">Tính port nâng cao</button>
+    <div class="nav-group">Dữ liệu</div>
+    <button data-tab="cards">Danh mục card mạng</button>
+    <button data-tab="rules">Cấu hình &amp; model</button>
+  </nav>
+  <div class="sidebar-foot">Chạy hoàn toàn trên trình duyệt, không cần cài đặt hay máy chủ.</div>
+</aside>
+<main class="workspace">
+
+<!-- ==================== Tổng quan ==================== -->
+<section id="dashboard" class="active">
+  <header class="page-head">
+    <h1>Tổng quan</h1>
+    <p>Tính số port cần cho máy chủ, switch LAN, switch quản lý, SAN switch và SAN storage theo chuẩn dual-fabric FC + mạng quản lý tách riêng.</p>
+  </header>
+  <div id="dashboard-summary"></div>
+  <div class="card">
+    <h2>Bắt đầu thế nào?</h2>
+    <ol class="steps">
+      <li><b>Tạo nhanh</b>: chọn model máy chủ / storage / SAN switch có sẵn, nhập số lượng, bấm một nút là có số port và loại dây.</li>
+      <li><b>Cáp &amp; tủ rack</b>: khai báo sơ đồ tủ, tool tính số mét dây và số sợi cần đặt hàng.</li>
+      <li><b>Danh sách thiết bị</b>: khi hệ thống có nhiều loại máy chủ khác nhau, thêm từng dòng để tính tổng.</li>
+      <li><b>Đọc file BOM</b>: tải file báo giá Excel/CSV để tự đếm card mạng/HBA và số port.</li>
+    </ol>
+    <p class="muted">Lưu ý: bản này không tự ghi vào ổ đĩa. Sửa dữ liệu xong thì bấm "Tải xuống" để lấy file .yaml/.json rồi chép đè vào thư mục <code>port-sizing-tool</code>.</p>
+  </div>
+  <div class="card">
+    <details class="selftest">
+      <summary>Kiểm tra tự động (self-test)</summary>
+      <div id="selftest"></div>
+    </details>
+  </div>
+</section>
+
+<!-- ==================== Tạo nhanh ==================== -->
+<section id="generate">
+  <header class="page-head">
+    <h1>Tạo nhanh</h1>
+    <p>Chọn model từ danh mục, nhập số lượng rồi bấm "Tính port &amp; loại dây". Phần này độc lập, không ảnh hưởng tới Danh sách thiết bị.</p>
+  </header>
+
+  <div class="card-grid">
+    <div class="card">
+      <h2>Máy chủ</h2>
+      <div class="form-grid">
+        <label class="field wide">Model <select id="gen-server-model"><option value="">— Không chọn —</option></select></label>
+        <label class="field">Số lượng <input type="number" id="gen-server-qty" min="0" value="0"></label>
+        <label class="field">Kết nối lưu trữ
+          <select id="gen-server-protocol">
+            <option value="">Không (chỉ mạng LAN)</option>
+            <option value="fc">FC (qua SAN switch)</option>
+            <option value="iscsi">iSCSI (qua switch LAN)</option>
+          </select>
+        </label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>SAN Storage</h2>
+      <div class="form-grid">
+        <label class="field wide">Model <select id="gen-storage-model"><option value="">— Không chọn —</option></select></label>
+        <label class="field">Số lượng <input type="number" id="gen-storage-qty" min="0" value="0"></label>
+      </div>
+    </div>
+    <div class="card">
+      <h2>SAN Switch</h2>
+      <div class="form-grid">
+        <label class="field wide">Model <select id="gen-sansw-model"><option value="">— Không chọn —</option></select>
+          <small>Dùng để biết cần bao nhiêu switch vật lý theo số port thật của model.</small></label>
+      </div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" onclick="runGenerate()">Tính port &amp; loại dây</button>
+    <span class="muted">Chưa có model cần dùng? Thêm ở mục "Cấu hình &amp; model".</span>
+  </div>
+  <div id="generate-result"></div>
+</section>
+
+<!-- ==================== Cáp & tủ rack ==================== -->
+<section id="cabling">
+  <header class="page-head">
+    <h1>Cáp &amp; tủ rack</h1>
+    <p>Dây đi lên khay cáp trên nóc tủ rồi xuống tủ đích, nên chiều dài được tính theo số tủ cách nhau (theo kinh nghiệm thi công, sửa được).</p>
+  </header>
+
+  <div class="card-grid">
+    <div class="card">
+      <h2>1. Sơ đồ tủ rack</h2>
+      <div class="form-grid">
+        <label class="field">Số hàng tủ <input type="number" id="cab-rows" min="1" value="1" onchange="renderRackLayout()"></label>
+        <label class="field">Số tủ mỗi hàng <input type="number" id="cab-per-row" min="1" value="4" onchange="renderRackLayout()"></label>
+      </div>
+      <div class="table-wrap" id="cab-layout"></div>
+      <p class="muted">Chữ cái là hàng, số là vị trí trong hàng (A01, A02… B01…). Giữa hai hàng là lối đi.</p>
+    </div>
+    <div class="card">
+      <h2>2. Quy tắc chiều dài (mét)</h2>
+      <div class="form-grid">
+        <label class="field">Trong cùng tủ <input type="number" id="cab-intra" step="0.5" value="5" onchange="renderCablePlan()"></label>
+        <label class="field">2 tủ kề nhau <input type="number" id="cab-adjacent" step="0.5" value="10" onchange="renderCablePlan()"></label>
+        <label class="field">Cộng thêm mỗi tủ xa hơn <input type="number" id="cab-step" step="0.5" value="2.5" onchange="renderCablePlan()"></label>
+        <label class="field">Cộng thêm mỗi lần qua lối đi <input type="number" id="cab-row-cross" step="0.5" value="6" onchange="renderCablePlan()"></label>
+        <label class="field">Dự phòng (%) <input type="number" id="cab-spare" value="10" onchange="renderCablePlan()"></label>
+      </div>
+      <p class="muted">Mặc định: cùng tủ 5m, kề nhau 10m, cách 2 tủ 12,5m, cách 3 tủ 15m; khác hàng cộng 6m mỗi lần qua lối đi.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. Độ dài dây đúc sẵn (làm tròn lên)</h2>
+    <div class="form-grid">
+      <label class="field">Dây đồng (m) <input type="text" id="cab-std-copper" value="1, 2, 3, 5, 7, 10, 15, 20, 30" onchange="renderCablePlan()"></label>
+      <label class="field">Dây quang (m) <input type="text" id="cab-std-fiber" value="1, 2, 3, 5, 10, 15, 20, 30, 50" onchange="renderCablePlan()"></label>
+      <label class="field">Dây DAC (m) <input type="text" id="cab-std-dac" value="1, 2, 3, 5" onchange="renderCablePlan()"></label>
+    </div>
+    <p class="muted">Để trống một ô nghĩa là cắt/bấm dây theo đúng số mét thực tế, không làm tròn.</p>
+  </div>
+
+  <div class="card">
+    <h2>4. Các tuyến kết nối</h2>
+    <div class="actions tight">
+      <button class="primary" onclick="importLinksFromGenerate()">Lấy số dây từ kết quả Tạo nhanh</button>
+      <button onclick="addCableLink()">+ Thêm tuyến</button>
+    </div>
+    <div id="cab-msg"></div>
+    <div class="table-wrap" id="cab-links"></div>
+  </div>
+  <div id="cab-result"></div>
+</section>
+
+<!-- ==================== Danh sách thiết bị ==================== -->
+<section id="inventory">
+  <header class="page-head">
+    <h1>Danh sách thiết bị</h1>
+    <p>Thêm từng nhóm máy chủ / storage (mỗi dòng một loại). Kết quả port ở dưới tự cập nhật ngay.</p>
+  </header>
+
+  <div class="card">
+    <h2>Thêm thiết bị</h2>
+    <div class="form-grid">
+      <label class="field">Loại thiết bị <select id="inv-role" onchange="updateInvModelDropdown()"></select></label>
+      <label class="field">Số lượng <input type="number" id="inv-qty" min="1" value="1"></label>
+      <label class="field">Kết nối lưu trữ
+        <select id="inv-protocol">
+          <option value="">Không</option>
+          <option value="fc">FC</option>
+          <option value="iscsi">iSCSI</option>
+        </select>
+      </label>
+      <label class="field">Model <select id="inv-model"><option value="">— Không chọn —</option></select></label>
+      <label class="field">Số port data <small>(máy chủ, bỏ trống = mặc định)</small><input type="number" id="inv-data-ports" min="1"></label>
+      <label class="field">Số port controller <small>(storage, bỏ trống = mặc định)</small><input type="number" id="inv-controller-ports" min="1"></label>
+    </div>
+    <div class="actions"><button class="primary" onclick="addInventoryItem()">+ Thêm vào danh sách</button></div>
+  </div>
+
+  <div class="card">
+    <h2>Danh sách hiện tại</h2>
+    <div class="table-wrap" id="inventory-table"></div>
+    <div class="actions tight">
+      <button onclick="downloadText('inventory.yaml', inventoryToYaml())">Tải xuống inventory.yaml</button>
+      <button onclick="loadInventoryFromFile()">Mở file inventory.yaml…</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Số port cần dùng</h2>
+    <div id="inventory-live-size"></div>
+  </div>
+</section>
+
+<!-- ==================== Đọc file BOM ==================== -->
+<section id="scanbom">
+  <header class="page-head">
+    <h1>Đọc file BOM</h1>
+    <p>Tải file báo giá/BOM (Excel hoặc CSV). Tool tự nhận diện card mạng/HBA, nhân đúng số lượng theo từng hệ thống và tính tổng port.</p>
+  </header>
+
+  <div class="card-grid">
+    <div class="card">
+      <h2>Tải file lên</h2>
+      <p class="muted">Hỗ trợ .xlsx, .xls (đọc sheet đầu tiên) và .csv.</p>
+      <input type="file" id="bom-file" accept=".csv,.xlsx,.xls">
+      <div class="actions"><button class="primary" onclick="runScanBomFile()">Đọc file</button></div>
+    </div>
+    <div class="card">
+      <h2>Hoặc dán nội dung CSV</h2>
+      <textarea id="bom-paste" rows="4" placeholder="description,qty&#10;Emulex LPe36002 Dual Port 32Gb FC HBA,8"></textarea>
+      <div class="actions"><button onclick="runScanBomPaste()">Đọc nội dung đã dán</button></div>
+    </div>
+  </div>
+  <div id="scanbom-result"></div>
+</section>
+
+<!-- ==================== Tính port nâng cao ==================== -->
+<section id="size">
+  <header class="page-head">
+    <h1>Tính port nâng cao</h1>
+    <p>Tính lại từ Danh sách thiết bị nhưng cho phép đổi % dự phòng của tất cả switch trong một lần tính.</p>
+  </header>
+  <div class="card">
+    <div class="form-grid">
+      <label class="field">% dự phòng cho switch <small>(bỏ trống = theo cấu hình)</small><input type="number" id="spare-override"></label>
+    </div>
+    <div class="actions"><button class="primary" onclick="runSize()">Tính</button></div>
+  </div>
+  <div id="size-result"></div>
+</section>
+
+<!-- ==================== Danh mục card ==================== -->
+<section id="cards">
+  <header class="page-head">
+    <h1>Danh mục card mạng / HBA</h1>
+    <p>Bảng tra để nhận diện card trong file BOM: chuỗi nhận diện (mã card) → số port. Chỉ thêm số liệu lấy từ tài liệu chính hãng.</p>
+  </header>
+  <div class="card">
+    <div class="table-wrap" id="cards-table"></div>
+    <div class="actions tight">
+      <button onclick="downloadText('card_catalog.yaml', cardsToYaml())">Tải xuống card_catalog.yaml</button>
+      <button onclick="loadCardsFromFile()">Mở file card_catalog.yaml…</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Thêm card mới</h2>
+    <div class="form-grid">
+      <label class="field">Chuỗi nhận diện <input type="text" id="card-match" placeholder="VD: LPe36002"></label>
+      <label class="field">Số port <input type="number" id="card-ports" min="1" value="2"></label>
+      <label class="field">Loại
+        <select id="card-type"><option value="hba">HBA (FC)</option><option value="nic">NIC (mạng)</option></select>
+      </label>
+      <label class="field wide">Nguồn tài liệu <input type="text" id="card-source" placeholder="Link tài liệu chính hãng"></label>
+    </div>
+    <div class="actions"><button class="primary" onclick="addCard()">+ Thêm card</button></div>
+  </div>
+</section>
+
+<!-- ==================== Cấu hình & model ==================== -->
+<section id="rules">
+  <header class="page-head">
+    <h1>Cấu hình &amp; model</h1>
+    <p>Thêm model thiết bị mới, xuất/nhập danh mục model, hoặc sửa trực tiếp file cấu hình rules.yaml.</p>
+  </header>
+
+  <div class="hint">Model tự thêm không được đối chiếu với tài liệu hãng — số liệu do bạn tự chịu trách nhiệm. Thêm xong nhớ bấm "Tải xuống rules.yaml" để lưu.</div>
+
+  <div class="card">
+    <h2>Thêm model máy chủ</h2>
+    <div class="form-grid">
+      <label class="field">Mã model <small>(chữ thường, số, gạch dưới)</small><input type="text" id="model-id" placeholder="VD: dell_r960"></label>
+      <label class="field">Hãng <input type="text" id="model-vendor" placeholder="VD: Dell"></label>
+      <label class="field">Tên model <input type="text" id="model-name" placeholder="VD: PowerEdge R960"></label>
+      <label class="field">Kích thước <input type="text" id="model-form-factor" placeholder="1U / 2U / 4U"></label>
+      <label class="field">Port quản lý (iDRAC/iLO) <input type="number" id="model-mgmt-hw" value="1" min="0"></label>
+      <label class="field">Số khe OCP <input type="number" id="model-ocp-slots" min="0" value="0"></label>
+      <label class="field">Số khe PCIe tối đa <input type="number" id="model-pcie-slots" min="0" value="0"></label>
+      <label class="check"><input type="checkbox" id="model-has-lom"> Có card mạng onboard (LOM)</label>
+      <label class="field wide">Nguồn tài liệu <small>(không bắt buộc)</small><input type="text" id="model-source" placeholder="Link tài liệu nếu có"></label>
+    </div>
+    <p class="muted">Số port data của máy chủ không phụ thuộc model (tuỳ card đặt hàng) — chỉnh ở "Danh sách thiết bị".</p>
+    <div class="actions"><button class="primary" onclick="addServerModel()">+ Thêm model máy chủ</button></div>
+    <div id="model-msg"></div>
+  </div>
+
+  <div class="card-grid">
+    <div class="card">
+      <h2>Thêm model SAN storage</h2>
+      <div class="form-grid">
+        <label class="field">Mã model <input type="text" id="san-model-id" placeholder="VD: dell_powerstore500"></label>
+        <label class="field">Hãng <input type="text" id="san-model-vendor" placeholder="VD: Dell"></label>
+        <label class="field">Tên model <input type="text" id="san-model-name" placeholder="VD: PowerStore 500"></label>
+        <label class="field">Kích thước <input type="text" id="san-model-form-factor" placeholder="2U"></label>
+        <label class="field">Port quản lý <input type="number" id="san-model-mgmt-hw" value="1" min="0"></label>
+        <label class="field">Số controller <input type="number" id="san-model-controllers" min="1" value="2"></label>
+        <label class="field wide">Nguồn tài liệu <input type="text" id="san-model-source" placeholder="Link tài liệu nếu có"></label>
+      </div>
+      <div class="actions"><button class="primary" onclick="addSanStorageModel()">+ Thêm model storage</button></div>
+      <div id="san-model-msg"></div>
+    </div>
+    <div class="card">
+      <h2>Thêm model SAN switch</h2>
+      <div class="form-grid">
+        <label class="field">Mã model <input type="text" id="sansw-model-id" placeholder="VD: cisco_mds9124v"></label>
+        <label class="field">Hãng <input type="text" id="sansw-model-vendor" placeholder="VD: Cisco"></label>
+        <label class="field">Tên model <input type="text" id="sansw-model-name" placeholder="VD: MDS 9124V"></label>
+        <label class="field">Kích thước <input type="text" id="sansw-model-form-factor" placeholder="1U"></label>
+        <label class="field">Port quản lý <input type="number" id="sansw-model-mgmt-hw" value="1" min="0"></label>
+        <label class="field">Tổng port FC <input type="number" id="sansw-model-total-ports" min="1" value="24"></label>
+        <label class="field wide">Nguồn tài liệu <input type="text" id="sansw-model-source" placeholder="Link tài liệu nếu có"></label>
+      </div>
+      <div class="actions"><button class="primary" onclick="addSanSwitchModel()">+ Thêm model switch</button></div>
+      <div id="sansw-model-msg"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Danh mục model (file JSON)</h2>
+    <p class="muted">Xuất danh mục ra file .json để lưu hoặc chia sẻ. Nhập file .json chỉ thêm model chưa có, không ghi đè model đã tồn tại.</p>
+    <div class="table-wrap"><table>
+      <tr><th>Danh mục</th><th>Thao tác</th></tr>
+      <tr><td>Máy chủ</td><td><button onclick="downloadText('server_models.json', JSON.stringify(parsedRules ? parsedRules.server_models : {}, null, 2))">Xuất .json</button>
+        <button onclick="importModelsJson('server_models')">Nhập .json…</button></td></tr>
+      <tr><td>SAN storage</td><td><button onclick="downloadText('san_storage_models.json', JSON.stringify(parsedRules ? parsedRules.san_storage_models : {}, null, 2))">Xuất .json</button>
+        <button onclick="importModelsJson('san_storage_models')">Nhập .json…</button></td></tr>
+      <tr><td>SAN switch</td><td><button onclick="downloadText('san_switch_models.json', JSON.stringify(parsedRules ? parsedRules.san_switch_models : {}, null, 2))">Xuất .json</button>
+        <button onclick="importModelsJson('san_switch_models')">Nhập .json…</button></td></tr>
+    </table></div>
+    <div id="model-db-msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>File cấu hình rules.yaml (nâng cao)</h2>
+    <p class="muted">Sửa trực tiếp nội dung rồi bấm "Áp dụng" để kiểm tra và dùng cho các mục khác.</p>
+    <textarea id="rules-text" rows="22"></textarea>
+    <div class="actions">
+      <button class="primary" onclick="applyRules()">Áp dụng</button>
+      <button onclick="downloadText('rules.yaml', document.getElementById('rules-text').value)">Tải xuống rules.yaml</button>
+      <button onclick="loadFileInto('rules-text')">Mở file…</button>
+    </div>
+    <div id="rules-msg"></div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<!-- Du lieu mac dinh (embed nguyen ban YAML that trong thu muc, khong parse o day) -->
+<script type="application/x-yaml" id="default-rules-yaml">
+# Port-sizing rules cho ha tang server / LAN switch / SAN switch / SAN storage.
+# Chinh sua file nay de tuy bien theo tung du an - khong sua code.
+#
+# roles:
+#   kind: leaf  -> thiet bi nam trong inventory (server, storage), sinh ra port "nguon".
+#   kind: pair  -> cap thiet bi redundant (leaf switch A/B, SAN fabric A/B, mgmt switch A/B),
+#                  KHONG khai bao trong inventory - so luong duoc TINH RA tu cac role leaf
+#                  ket noi vao no (qua connections o duoi).
+#
+# own_ports (chi ap dung cho kind: pair) la port CO DINH tren MOI switch vat ly trong cap
+# (mgmt cua switch, uplink len core, peer-link/VPC...), khong bi chia doi va khong bi spare %.
+#
+# spare_percent ap dung cho phan downlink/host-port (phan phu thuoc so luong thiet bi ket noi vao),
+# de danh cho tang truong.
+#
+# max_ports_per_unit (optional) = so port toi da 1 switch vat ly co the co. Neu vuot, tool se goi y
+# can bao nhieu switch moi ben cua cap (khong tinh port ISL de cascade nhieu switch/fabric - can
+# cong tay neu phai noi nhieu switch tren cung 1 fabric).
+#
+# protocol_variants: CONG THEM (khong thay the) vao ports mac dinh cua role - vi du fc chi cong
+# them fc_hba, khong dinh nghia lai mgmt_hw/mgmt_os/data.
+#
+# server_models: du lieu THAT tra tu tai lieu chinh hang (xem vendor-servers-reference.yaml, co
+# link nguon + ngay kiem tra). CHI dung de: (1) validate item.model trong inventory co ton tai,
+# (2) in vao report de biet so lieu server dua tren model/nguon nao.
+# KHONG dung de suy ra so "data ports" co dinh theo model, vi so port data thuc te (OCP NIC card)
+# la lua chon khi dat hang (BOM), khong phai thong so co dinh cua model - neu gan cung 1 so cho
+# tung model se la BIA SO LIEU. Muon dung so data khac 2 (mac dinh) cho 1 server cu the, khai bao
+# "data_ports: <N>" ngay trong inventory item do.
+
+roles:
+  server:
+    kind: leaf
+    ports:
+      mgmt_hw: 1   # port mgmt phan cung: iLO/iDRAC/HDM... - xac nhan = 1 tren ca Dell/HPE/H3C (xem server_models)
+      mgmt_os: 1   # port/VLAN mgmt OS/hypervisor - LUU Y: khong hang nao co port vat ly rieng cho
+                   # cai nay, day la 1 NIC/VLAN duoc trich ra tu LOM hoac data card, khong phai
+                   # them 1 port hardware doc lap ngoai LOM/OCP.
+      data: 2      # NIC data (LAN) mac dinh khi khong khai bao data_ports - OCP 2-port 10/25GbE la
+                   # cau hinh pho bien nhat tren ca 3 hang tai thoi diem kiem tra (09/2026)
+    protocol_variants:
+      fc:
+        fc_hba: 2   # HBA FC 2-port (Broadcom/Marvell) - chuan cong nghiep, giong nhau tren ca 3 hang
+      iscsi:
+        iscsi_data: 2   # NIC iSCSI rieng, khong dung chung voi LAN data
+
+  san_storage:
+    kind: leaf
+    ports:
+      mgmt_hw: 1        # port mgmt cua storage array
+      controller_port: 4  # tong port front-end ca 2 controller (VD: 2 port/controller x 2 controller),
+                           # se duoc chia deu cho SAN-SW1/SAN-SW2 (moi fabric thay ca 2 controller)
+
+  network_switch:        # cap LAN leaf/ToR switch (leaf-A / leaf-B)
+    kind: pair
+    own_ports:
+      mgmt_hw: 1          # port mgmt rieng cua tung switch
+      uplink: 2            # uplink len core/spine
+      peer_link: 1         # VPC/MLAG peer-link giua 2 switch trong cap
+    spare_percent: 20
+    max_ports_per_unit: 48
+    # media: THAM KHAO, khong phai so lieu do tu thiet bi cu the - toc do/khoang cach thuc te
+    # quyet dinh dung dong hay quang, khong co cong thuc chinh xac 100%.
+    media: "Đồng (RJ45, Cat6/6A) nếu ≤10GbE và khoảng cách ngắn; Quang (SFP+/SFP28/QSFP, LC/MPO) nếu 25GbE trở lên hoặc khoảng cách xa"
+
+  mgmt_switch:            # cap OOB mgmt switch (leaf-A / leaf-B), tach rieng khoi network_switch
+    kind: pair
+    own_ports:
+      uplink: 1
+    spare_percent: 20
+    max_ports_per_unit: 48
+    media: "Đồng (RJ45, Cat5e/6) — port quản lý (iDRAC/iLO/HDM) luôn là 1GbE, hầu như luôn dùng dây đồng"
+
+  san_switch:             # cap SAN fabric switch (SAN-SW1 / SAN-SW2) - 2 FABRIC DOC LAP,
+    kind: pair            # khong co ISL giua 2 ben (best practice dual-fabric FC)
+    own_ports:
+      mgmt_hw: 1
+    spare_percent: 20
+    max_ports_per_unit: 24
+    media: "Quang (LC connector, MMF OM3/OM4) — FC bản chất là quang, không có bản dây đồng ở tốc độ 8/16/32/64GFC"
+
+server_models:
+  dell_r660:
+    vendor: Dell
+    model_name: "PowerEdge R660"
+    form_factor: "1U"
+    mgmt_hw: 1
+    ocp_slots: 1
+    has_onboard_lom: true
+    pcie_slots_max: 3
+    source: "https://www.delltechnologies.com/asset/en-us/products/servers/technical-support/poweredge-r660-spec-sheet.pdf"
+  dell_r760:
+    vendor: Dell
+    model_name: "PowerEdge R760"
+    form_factor: "2U"
+    mgmt_hw: 1
+    ocp_slots: 1
+    has_onboard_lom: true
+    pcie_slots_max: 8
+    source: "https://www.delltechnologies.com/asset/en-us/products/servers/technical-support/poweredge-r760-spec-sheet.pdf"
+  hpe_dl360_gen11:
+    vendor: HPE
+    model_name: "ProLiant DL360 Gen11"
+    form_factor: "1U"
+    mgmt_hw: 1
+    ocp_slots: 2
+    has_onboard_lom: false
+    pcie_slots_max: 2
+    source: "https://www.hpe.com/psnow/doc/a50004306enw"
+  hpe_dl380_gen11:
+    vendor: HPE
+    model_name: "ProLiant DL380 Gen11"
+    form_factor: "2U"
+    mgmt_hw: 1
+    ocp_slots: 2
+    has_onboard_lom: false
+    pcie_slots_max: 8
+    source: "https://www.hpe.com/psnow/doc/a50004307enw.pdf"
+  h3c_r4700_g6:
+    vendor: H3C
+    model_name: "UniServer R4700 G6"
+    form_factor: "1U"
+    mgmt_hw: 1
+    ocp_slots: 2
+    has_onboard_lom: false
+    pcie_slots_max: 4
+    source: "https://www.h3c.com/en/Products_and_Solutions/Computing/UniServer_Series/Products_With_Picture/2U/R4700_G6/R4700_G6/"
+  h3c_r4900_g6:
+    vendor: H3C
+    model_name: "UniServer R4900 G6"
+    form_factor: "2U"
+    mgmt_hw: 1
+    ocp_slots: 2
+    has_onboard_lom: false
+    pcie_slots_max: 10
+    source: "https://www.h3c.com/en/Products_and_Solutions/Computing/UniServer_Series/Products_With_Picture/2U/R4900_G6/R4900_G6/"
+
+# san_storage_models: tra tu tai lieu chinh hang (kiem tra 09/2026, xem chi tiet + trich dan trong
+# san_storage_models.json). Chua day du - bo sung khi co spec/BOM thuc te.
+san_storage_models:
+  dell_powerstore_500t:
+    vendor: Dell
+    model_name: "PowerStore 500T"
+    form_factor: "2U"
+    mgmt_hw: 2
+    controllers: 2
+    source: "https://www.delltechnologies.com/asset/en-us/products/storage/technical-support/dell-powerstore-gen2-spec-sheet.pdf"
+
+# san_switch_models: tra tu tai lieu chinh hang (kiem tra 09/2026, xem chi tiet + trich dan trong
+# san_switch_models.json). "total_ports" = so port FC vat ly tren 1 switch, dung o tab "Generate" de
+# biet can bao nhieu switch vat ly (ghi de max_ports_per_unit cua role san_switch cho lan tinh do).
+san_switch_models:
+  cisco_mds9124v:
+    vendor: Cisco
+    model_name: "MDS 9124V"
+    form_factor: "1U"
+    mgmt_hw: 1
+    total_ports: 24
+    source: "https://www.cisco.com/c/en/us/products/collateral/storage-networking/mds-9100-series-multilayer-fabric-switches/mds-9124v-fibre-channel-switch-ds.pdf"
+  brocade_g620:
+    vendor: "Broadcom (Brocade)"
+    model_name: "G620"
+    form_factor: "1U"
+    mgmt_hw: 1
+    total_ports: 48
+    source: "https://techdocs.broadcom.com/us/en/fibre-channel-networking/switches/g620-switch/1-0/Brocade-G620-Switch-Technical-Specifications_new.html"
+
+connections:
+  - from_role: server
+    from_port: data
+    to_role: network_switch
+    to_port: downlink
+  - from_role: server
+    from_port: mgmt_hw
+    to_role: mgmt_switch
+    to_port: downlink
+  - from_role: server
+    from_port: mgmt_os
+    to_role: mgmt_switch
+    to_port: downlink
+  - from_role: server
+    from_port: fc_hba
+    to_role: san_switch
+    to_port: downlink
+    requires_protocol: fc
+  - from_role: server
+    from_port: iscsi_data
+    to_role: network_switch
+    to_port: downlink
+    requires_protocol: iscsi
+  - from_role: san_storage
+    from_port: controller_port
+    to_role: san_switch
+    to_port: downlink
+  - from_role: san_storage
+    from_port: mgmt_hw
+    to_role: mgmt_switch
+    to_port: downlink
+</script>
+
+<script type="application/x-yaml" id="default-cards-yaml">
+cards:
+- match: LPe35000
+  ports: 1
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: LPe35002
+  ports: 2
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: LPe35004
+  ports: 4
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: LPe36000
+  ports: 1
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: LPe36002
+  ports: 2
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: QLE2770
+  ports: 1
+  type: hba
+  source: https://lenovopress.lenovo.com/lp1307-qlogic-qle2770-series-32gb-fibre-channel-adapters
+- match: QLE2772
+  ports: 2
+  type: hba
+  source: https://lenovopress.lenovo.com/lp1307-qlogic-qle2770-series-32gb-fibre-channel-adapters
+- match: SN1620E
+  ports: 2
+  type: hba
+  source: https://buy.hpe.com/us/en/options/adapters/host-adapters/hpe-sn1620e-32gb-2p-fc-securehba/p/s4s01a
+- match: BCM57414
+  ports: 2
+  type: nic
+  source: https://buy.hpe.com/us/en/options/adapters/host-adapters/broadcom-bcm57414-ethernet-10-25gb-2%e2%80%91port-sfp28-ocp3-adapter-for-hpe/p/p10115-b21
+- match: BCM5719
+  ports: 4
+  type: nic
+  source: https://buy.hpe.com/us/en/options/adapters/host-adapters/proliant-host-adapters/broadcom-bcm5719-ethernet-1gb-4-port-base-t-ocp3-adapter-for-hpe/p/p51181-b21
+- match: S4P77A
+  ports: 2
+  type: nic
+  source: https://buy.hpe.com/us/en/options/storage-options/storeonce-options/storeonce-options/hpe-storeonce-gen5-10-25gb-2%e2%80%91port-sfp-adapter/p/s4p77a
+</script>
+
+<script type="application/x-yaml" id="default-inventory-yaml">
+inventory:
+  - role: server
+    qty: 2
+    protocol: iscsi
+    model: dell_r660
+    data_ports: 2
+  - role: san_storage
+    qty: 1
+</script>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,63 @@
+{
+  "_comment": "Database model server, tra tu tai lieu chinh hang (xem vendor-servers-reference.yaml de biet ngay kiem tra + trich dan day du). Dung 'Nhap server_models.json...' o tab Rules (web/index.html) hoac dien tay vao rules.yaml (Python) de dua vao.",
+  "dell_r660": {
+    "vendor": "Dell",
+    "model_name": "PowerEdge R660",
+    "form_factor": "1U",
+    "mgmt_hw": 1,
+    "ocp_slots": 1,
+    "has_onboard_lom": true,
+    "pcie_slots_max": 3,
+    "source": "https://www.delltechnologies.com/asset/en-us/products/servers/technical-support/poweredge-r660-spec-sheet.pdf"
+  },
+  "dell_r760": {
+    "vendor": "Dell",
+    "model_name": "PowerEdge R760",
+    "form_factor": "2U",
+    "mgmt_hw": 1,
+    "ocp_slots": 1,
+    "has_onboard_lom": true,
+    "pcie_slots_max": 8,
+    "source": "https://www.delltechnologies.com/asset/en-us/products/servers/technical-support/poweredge-r760-spec-sheet.pdf"
+  },
+  "hpe_dl360_gen11": {
+    "vendor": "HPE",
+    "model_name": "ProLiant DL360 Gen11",
+    "form_factor": "1U",
+    "mgmt_hw": 1,
+    "ocp_slots": 2,
+    "has_onboard_lom": false,
+    "pcie_slots_max": 2,
+    "source": "https://www.hpe.com/psnow/doc/a50004306enw"
+  },
+  "hpe_dl380_gen11": {
+    "vendor": "HPE",
+    "model_name": "ProLiant DL380 Gen11",
+    "form_factor": "2U",
+    "mgmt_hw": 1,
+    "ocp_slots": 2,
+    "has_onboard_lom": false,
+    "pcie_slots_max": 8,
+    "source": "https://www.hpe.com/psnow/doc/a50004307enw.pdf"
+  },
+  "h3c_r4700_g6": {
+    "vendor": "H3C",
+    "model_name": "UniServer R4700 G6",
+    "form_factor": "1U",
+    "mgmt_hw": 1,
+    "ocp_slots": 2,
+    "has_onboard_lom": false,
+    "pcie_slots_max": 4,
+    "source": "https://www.h3c.com/en/Products_and_Solutions/Computing/UniServer_Series/Products_With_Picture/2U/R4700_G6/R4700_G6/"
+  },
+  "h3c_r4900_g6": {
+    "vendor": "H3C",
+    "model_name": "UniServer R4900 G6",
+    "form_factor": "2U",
+    "mgmt_hw": 1,
+    "ocp_slots": 2,
+    "has_onboard_lom": false,
+    "pcie_slots_max": 10,
+    "source": "https://www.h3c.com/en/Products_and_Solutions/Computing/UniServer_Series/Products_With_Picture/2U/R4900_G6/R4900_G6/"
+  }
+}

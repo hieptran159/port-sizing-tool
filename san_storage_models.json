@@ -1,0 +1,11 @@
+{
+  "_comment": "Database model SAN storage array, tra tu tai lieu chinh hang (kiem tra 2026-09-22). Chua day du - bo sung them khi co spec/BOM thuc te, theo dung format cac entry ben duoi.",
+  "dell_powerstore_500t": {
+    "vendor": "Dell",
+    "model_name": "PowerStore 500T",
+    "form_factor": "2U",
+    "mgmt_hw": 2,
+    "controllers": 2,
+    "source": "https://www.delltechnologies.com/asset/en-us/products/storage/technical-support/dell-powerstore-gen2-spec-sheet.pdf"
+  }
+}

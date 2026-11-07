@@ -1,0 +1,178 @@
+# Port-sizing rules cho ha tang server / LAN switch / SAN switch / SAN storage.
+# Chinh sua file nay de tuy bien theo tung du an - khong sua code.
+#
+# roles:
+#   kind: leaf  -> thiet bi nam trong inventory (server, storage), sinh ra port "nguon".
+#   kind: pair  -> cap thiet bi redundant (leaf switch A/B, SAN fabric A/B, mgmt switch A/B),
+#                  KHONG khai bao trong inventory - so luong duoc TINH RA tu cac role leaf
+#                  ket noi vao no (qua connections o duoi).
+#
+# own_ports (chi ap dung cho kind: pair) la port CO DINH tren MOI switch vat ly trong cap
+# (mgmt cua switch, uplink len core, peer-link/VPC...), khong bi chia doi va khong bi spare %.
+#
+# spare_percent ap dung cho phan downlink/host-port (phan phu thuoc so luong thiet bi ket noi vao),
+# de danh cho tang truong.
+#
+# max_ports_per_unit (optional) = so port toi da 1 switch vat ly co the co. Neu vuot, tool se goi y
+# can bao nhieu switch moi ben cua cap (khong tinh port ISL de cascade nhieu switch/fabric - can
+# cong tay neu phai noi nhieu switch tren cung 1 fabric).
+#
+# protocol_variants: CONG THEM (khong thay the) vao ports mac dinh cua role - vi du fc chi cong
+# them fc_hba, khong dinh nghia lai mgmt_hw/mgmt_os/data.
+#
+# server_models: du lieu THAT tra tu tai lieu chinh hang (xem vendor-servers-reference.yaml, co
+# link nguon + ngay kiem tra). CHI dung de: (1) validate item.model trong inventory co ton tai,
+# (2) in vao report de biet so lieu server dua tren model/nguon nao.
+# KHONG dung de suy ra so "data ports" co dinh theo model, vi so port data thuc te (OCP NIC card)
+# la lua chon khi dat hang (BOM), khong phai thong so co dinh cua model - neu gan cung 1 so cho
+# tung model se la BIA SO LIEU. Muon dung so data khac 2 (mac dinh) cho 1 server cu the, khai bao
+# "data_ports: <N>" ngay trong inventory item do.
+
+roles:
+  server:
+    kind: leaf
+    ports:
+      mgmt_hw: 1   # port mgmt phan cung: iLO/iDRAC/HDM... - xac nhan = 1 tren ca Dell/HPE/H3C (xem server_models)
+      mgmt_os: 1   # port/VLAN mgmt OS/hypervisor - LUU Y: khong hang nao co port vat ly rieng cho
+                   # cai nay, day la 1 NIC/VLAN duoc trich ra tu LOM hoac data card, khong phai
+                   # them 1 port hardware doc lap ngoai LOM/OCP.
+      data: 2      # NIC data (LAN) mac dinh khi khong khai bao data_ports - OCP 2-port 10/25GbE la
+                   # cau hinh pho bien nhat tren ca 3 hang tai thoi diem kiem tra (09/2026)
+    protocol_variants:
+      fc:
+        fc_hba: 2   # HBA FC 2-port (Broadcom/Marvell) - chuan cong nghiep, giong nhau tren ca 3 hang
+      iscsi:
+        iscsi_data: 2   # NIC iSCSI rieng, khong dung chung voi LAN data
+
+  san_storage:
+    kind: leaf
+    ports:
+      mgmt_hw: 1        # port mgmt cua storage array
+      controller_port: 4  # tong port front-end ca 2 controller (VD: 2 port/controller x 2 controller),
+                           # se duoc chia deu cho SAN-SW1/SAN-SW2 (moi fabric thay ca 2 controller)
+
+  network_switch:        # cap LAN leaf/ToR switch (leaf-A / leaf-B)
+    kind: pair
+    own_ports:
+      mgmt_hw: 1          # port mgmt rieng cua tung switch
+      uplink: 2            # uplink len core/spine
+      peer_link: 1         # VPC/MLAG peer-link giua 2 switch trong cap
+    spare_percent: 20
+    max_ports_per_unit: 48
+
+  mgmt_switch:            # cap OOB mgmt switch (leaf-A / leaf-B), tach rieng khoi network_switch
+    kind: pair
+    own_ports:
+      uplink: 1
+    spare_percent: 20
+    max_ports_per_unit: 48
+
+  san_switch:             # cap SAN fabric switch (SAN-SW1 / SAN-SW2) - 2 FABRIC DOC LAP,
+    kind: pair            # khong co ISL giua 2 ben (best practice dual-fabric FC)
+    own_ports:
+      mgmt_hw: 1
+    spare_percent: 20
+    max_ports_per_unit: 24
+
+# server_models: metadata tham khao/validate cho inventory item (field "model") - KHONG dung de
+# tinh port tu dong (xem ghi chu o dau file). Du lieu tra tu tai lieu chinh hang, xem
+# vendor-servers-reference.yaml de biet ngay kiem tra + trich dan day du.
+server_models:
+  dell_r660:
+    vendor: Dell
+    model_name: "PowerEdge R660"
+    form_factor: "1U"
+    mgmt_hw: 1
+    ocp_slots: 1
+    has_onboard_lom: true   # 2x1GbE LOM optional, tach rieng khoi OCP
+    pcie_slots_max: 3
+    source: "https://www.delltechnologies.com/asset/en-us/products/servers/technical-support/poweredge-r660-spec-sheet.pdf"
+  dell_r760:
+    vendor: Dell
+    model_name: "PowerEdge R760"
+    form_factor: "2U"
+    mgmt_hw: 1
+    ocp_slots: 1
+    has_onboard_lom: true
+    pcie_slots_max: 8
+    source: "https://www.delltechnologies.com/asset/en-us/products/servers/technical-support/poweredge-r760-spec-sheet.pdf"
+  hpe_dl360_gen11:
+    vendor: HPE
+    model_name: "ProLiant DL360 Gen11"
+    form_factor: "1U"
+    mgmt_hw: 1
+    ocp_slots: 2   # slot thu 2 can lap CPU thu 2
+    has_onboard_lom: false
+    pcie_slots_max: 2
+    source: "https://www.hpe.com/psnow/doc/a50004306enw"
+  hpe_dl380_gen11:
+    vendor: HPE
+    model_name: "ProLiant DL380 Gen11"
+    form_factor: "2U"
+    mgmt_hw: 1
+    ocp_slots: 2
+    has_onboard_lom: false
+    pcie_slots_max: 8
+    source: "https://www.hpe.com/psnow/doc/a50004307enw.pdf"
+  h3c_r4700_g6:
+    vendor: H3C
+    model_name: "UniServer R4700 G6"
+    form_factor: "1U"
+    mgmt_hw: 1
+    ocp_slots: 2
+    has_onboard_lom: false
+    pcie_slots_max: 4
+    source: "https://www.h3c.com/en/Products_and_Solutions/Computing/UniServer_Series/Products_With_Picture/2U/R4700_G6/R4700_G6/"
+  h3c_r4900_g6:
+    vendor: H3C
+    model_name: "UniServer R4900 G6"
+    form_factor: "2U"
+    mgmt_hw: 1
+    ocp_slots: 2
+    has_onboard_lom: false
+    pcie_slots_max: 10
+    source: "https://www.h3c.com/en/Products_and_Solutions/Computing/UniServer_Series/Products_With_Picture/2U/R4900_G6/R4900_G6/"
+
+connections:
+  # server LAN data -> cap network_switch, chia deu 2 ben
+  - from_role: server
+    from_port: data
+    to_role: network_switch
+    to_port: downlink
+
+  # server mgmt (hardware + OS) -> cap mgmt_switch rieng, chia deu de 1 switch mgmt hong
+  # khong mat mgmt toan bo he thong
+  - from_role: server
+    from_port: mgmt_hw
+    to_role: mgmt_switch
+    to_port: downlink
+  - from_role: server
+    from_port: mgmt_os
+    to_role: mgmt_switch
+    to_port: downlink
+
+  # server HBA (FC) -> cap san_switch, chi tinh khi co thiet bi dung protocol: fc
+  - from_role: server
+    from_port: fc_hba
+    to_role: san_switch
+    to_port: downlink
+    requires_protocol: fc
+
+  # server iSCSI NIC -> cap network_switch (dung chung ha tang LAN, khac VLAN/segment)
+  - from_role: server
+    from_port: iscsi_data
+    to_role: network_switch
+    to_port: downlink
+    requires_protocol: iscsi
+
+  # storage controller front-end port -> cap san_switch, chia deu ca 2 fabric
+  - from_role: san_storage
+    from_port: controller_port
+    to_role: san_switch
+    to_port: downlink
+
+  # storage mgmt port -> cap mgmt_switch
+  - from_role: san_storage
+    from_port: mgmt_hw
+    to_role: mgmt_switch
+    to_port: downlink

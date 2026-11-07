@@ -1,0 +1,13 @@
+# Vi du BOM: 8 server noi SAN qua FC, 2 server noi storage qua iSCSI, 1 storage array.
+# "role" phai khop voi key trong roles: cua rules.yaml (chi khai bao role kind: leaf).
+# "model" (optional) phai khop key trong server_models: cua rules.yaml - dung de trich dan nguon
+# trong report, KHONG tu doi so port. "data_ports" (optional) de khai bao dung so port NIC data
+# thuc te theo OCP card se dat hang cho model do (vd HPE/H3C thuong chon 2x25GbE = 2 port).
+inventory:
+  - role: server
+    qty: 2
+    protocol: iscsi
+    model: dell_r660
+    data_ports: 2
+  - role: san_storage
+    qty: 1

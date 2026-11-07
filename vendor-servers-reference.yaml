@@ -1,0 +1,86 @@
+# Du lieu port server tra tu tai lieu chinh hang (spec sheet / QuickSpecs / datasheet chinh thuc).
+# Moi model deu co "source" + ngay truy cap - CHUA xac nhan thi KHONG dua vao file nay (tranh bia so lieu).
+# Pham vi hien tai: rack server 1U/2U mainstream, generation hien hanh (thang 09/2026).
+#
+# Ghi chu quan trong khi dung cho port-sizing-tool:
+# - "mgmt_hw" (iDRAC/iLO/HDM) luon la 1 port RJ45 rieng, dung nhu gia dinh trong rules.yaml.
+# - KHONG co vendor nao co mot port "mgmt_os" vat ly rieng biet. "mgmt_os" trong rules.yaml la
+#   khai niem logic (VLAN/NIC rieng cho quan ly OS/hypervisor), thuong trich ra tu LOM hoac data NIC,
+#   khong phai 1 port hardware doc lap. Neu thiet ke thuc te tach VLAN nay tren cung NIC data thi
+#   KHONG cong them port rieng cho mgmt_os.
+# - HPE Gen11 va H3C G6 KHONG co onboard LOM cho data (khac Dell R660/R760 van co LOM 2x1GbE optional).
+#   Toan bo port data cua ca 3 hang hien nay chu yeu di qua OCP 3.0 card (chon luc theo BOM,
+#   pho bien la 2 port 10/25GbE, nhung co the la 4x1GbE hoac 2x100GbE tuy card duoc chon).
+#   => so "data ports" thuc te PHU THUOC vao NIC card duoc order, khong co so cung dinh nhu iDRAC/iLO/HDM.
+
+vendors:
+  dell:
+    models:
+      - model: "PowerEdge R660"
+        form_factor: "1U"
+        mgmt_hw_ports: 1
+        mgmt_hw_note: "1 x Dedicated iDRAC Ethernet port (rear)"
+        embedded_lom: "2 x 1 GbE LOM card (optional)"
+        ocp_slot: "1 x OCP NIC 3.0 (optional) - co the lap dong thoi voi LOM"
+        pcie_slots_max: 3
+        source: "https://www.delltechnologies.com/asset/en-us/products/servers/technical-support/poweredge-r660-spec-sheet.pdf"
+        source_type: "Dell Specification Sheet (PDF, June 2024)"
+        checked: "2026-09-22"
+      - model: "PowerEdge R760"
+        form_factor: "2U"
+        mgmt_hw_ports: 1
+        mgmt_hw_note: "1 x Dedicated iDRAC Ethernet port (rear)"
+        embedded_lom: "2 x 1 GbE LOM card (optional)"
+        ocp_slot: "1 x OCP NIC 3.0 (optional) - co the lap dong thoi voi LOM"
+        pcie_slots_max: 8
+        source: "https://www.delltechnologies.com/asset/en-us/products/servers/technical-support/poweredge-r760-spec-sheet.pdf"
+        source_type: "Dell Specification Sheet (PDF, June 2024)"
+        checked: "2026-09-22"
+
+  hpe:
+    models:
+      - model: "ProLiant DL360 Gen11"
+        form_factor: "1U"
+        mgmt_hw_ports: 1
+        mgmt_hw_note: "1 Gb Dedicated HPE iLO Remote Management Network Port (rear) + 1 x Front iLO Service Port"
+        embedded_lom: "Khong co - bat buoc chon OCP card hoac stand-up (FlexibleLOM) card khi dat hang"
+        ocp_slot: "2 x OCP 3.0 (slot thu 2 yeu cau lap CPU thu 2)"
+        pcie_slots_max: "2 x16 PCIe Gen5 + 2 OCP slot"
+        source: "https://www.hpe.com/psnow/doc/a50004306enw"
+        source_type: "HPE QuickSpecs (a50004306enw)"
+        checked: "2026-09-22"
+      - model: "ProLiant DL380 Gen11"
+        form_factor: "2U"
+        mgmt_hw_ports: 1
+        mgmt_hw_note: "1 Gb Dedicated HPE iLO Remote Management Network Port (rear) + 1 x Front iLO Service Port"
+        embedded_lom: "Khong co - bat buoc chon OCP card hoac stand-up (FlexibleLOM) card khi dat hang"
+        ocp_slot: "2 x OCP mezzanine slot"
+        pcie_slots_max: 8
+        source: "https://www.hpe.com/psnow/doc/a50004307enw.pdf"
+        source_type: "HPE QuickSpecs (a50004307enw)"
+        checked: "2026-09-22"
+
+  h3c:
+    models:
+      - model: "UniServer R4700 G6"
+        form_factor: "1U"
+        mgmt_hw_ports: 1
+        mgmt_hw_note: "1 x Onboard 1 Gbps HDM management network port"
+        embedded_lom: "Khong co LOM data rieng - toan bo data qua OCP"
+        ocp_slot: "2 x OCP 3.0 (moi slot: 4xGE hoac 2x10GE hoac 2x25GE hoac 2x100GE)"
+        pcie_slots_max: 4
+        pcie_slots_note: "3 x PCIe 5.0 + 1 x PCIe 4.0 (chua tinh 2 OCP slot)"
+        source: "https://www.h3c.com/en/Products_and_Solutions/Computing/UniServer_Series/Products_With_Picture/2U/R4700_G6/R4700_G6/"
+        source_type: "H3C official product page"
+        checked: "2026-09-22"
+      - model: "UniServer R4900 G6"
+        form_factor: "2U"
+        mgmt_hw_ports: 1
+        mgmt_hw_note: "1 x Onboard 1 Gbps HDM management network port"
+        embedded_lom: "Khong co LOM data rieng - toan bo data qua OCP"
+        ocp_slot: "2 x OCP 3.0 (moi slot: 4xGE hoac 2x10GE hoac 2x25GE hoac 2x100GE)"
+        pcie_slots_max: 10
+        pcie_slots_note: "6 x PCIe 5.0 + 4 x PCIe 4.0 (chua tinh 2 OCP slot)"
+        source: "https://www.h3c.com/en/Products_and_Solutions/Computing/UniServer_Series/Products_With_Picture/2U/R4900_G6/R4900_G6/"
+        source_type: "H3C official product page"
+        checked: "2026-09-22"

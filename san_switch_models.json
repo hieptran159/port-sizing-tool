@@ -1,0 +1,19 @@
+{
+  "_comment": "Database model SAN switch (FC fabric switch), tra tu tai lieu chinh hang (kiem tra 2026-09-22). Chua day du - bo sung them khi co spec/BOM thuc te, theo dung format cac entry ben duoi. 'total_ports' = so port FC vat ly toi da tren 1 switch.",
+  "cisco_mds9124v": {
+    "vendor": "Cisco",
+    "model_name": "MDS 9124V",
+    "form_factor": "1U",
+    "mgmt_hw": 1,
+    "total_ports": 24,
+    "source": "https://www.cisco.com/c/en/us/products/collateral/storage-networking/mds-9100-series-multilayer-fabric-switches/mds-9124v-fibre-channel-switch-ds.pdf"
+  },
+  "brocade_g620": {
+    "vendor": "Broadcom (Brocade)",
+    "model_name": "G620",
+    "form_factor": "1U",
+    "mgmt_hw": 1,
+    "total_ports": 48,
+    "source": "https://techdocs.broadcom.com/us/en/fibre-channel-networking/switches/g620-switch/1-0/Brocade-G620-Switch-Technical-Specifications_new.html"
+  }
+}

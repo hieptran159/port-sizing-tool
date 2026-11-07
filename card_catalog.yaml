@@ -1,0 +1,50 @@
+# Bang tra cuu NIC/HBA card -> so port. Sua qua giao dien web (/cards) hoac tay.
+# match: chuoi con tim trong description/part_number cua dong BOM (khong phan biet hoa/thuong)
+# ports: so port CHINH XAC (tra tu tai lieu hang cua CARD, khong phai server)
+# type: nic hoac hba | source: link tai lieu xac nhan
+
+cards:
+- match: LPe35000
+  ports: 1
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: LPe35002
+  ports: 2
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: LPe35004
+  ports: 4
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: LPe36000
+  ports: 1
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: LPe36002
+  ports: 2
+  type: hba
+  source: https://www.mouser.com/datasheet/2/678/LPe3500X_PB109-1846871.pdf
+- match: QLE2770
+  ports: 1
+  type: hba
+  source: https://lenovopress.lenovo.com/lp1307-qlogic-qle2770-series-32gb-fibre-channel-adapters
+- match: QLE2772
+  ports: 2
+  type: hba
+  source: https://lenovopress.lenovo.com/lp1307-qlogic-qle2770-series-32gb-fibre-channel-adapters
+- match: SN1620E
+  ports: 2
+  type: hba
+  source: https://buy.hpe.com/us/en/options/adapters/host-adapters/hpe-sn1620e-32gb-2p-fc-securehba/p/s4s01a
+- match: BCM57414
+  ports: 2
+  type: nic
+  source: https://buy.hpe.com/us/en/options/adapters/host-adapters/broadcom-bcm57414-ethernet-10-25gb-2%e2%80%91port-sfp28-ocp3-adapter-for-hpe/p/p10115-b21
+- match: BCM5719
+  ports: 4
+  type: nic
+  source: https://buy.hpe.com/us/en/options/adapters/host-adapters/proliant-host-adapters/broadcom-bcm5719-ethernet-1gb-4-port-base-t-ocp3-adapter-for-hpe/p/p51181-b21
+- match: S4P77A
+  ports: 2
+  type: nic
+  source: https://buy.hpe.com/us/en/options/storage-options/storeonce-options/storeonce-options/hpe-storeonce-gen5-10-25gb-2%e2%80%91port-sfp-adapter/p/s4p77a
