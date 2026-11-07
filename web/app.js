@@ -324,7 +324,7 @@ function parseTabularRows2D(rows2D) {
 
 const TYPE_KEYWORD_RULES = [
   { type: "license", patterns: [/\bltu\b/i, /\blicense\b/i] },
-  { type: "support", patterns: [/tech care/i, /\bsupport\b/i] },
+  { type: "support", patterns: [/tech care/i, /\bsupport\b/i, /\bsupp\b/i] },
   { type: "service", patterns: [/\bsvc\b/i, /\bstartup\b/i, /learning credits/i] },
   { type: "battery", patterns: [/\bbattery\b/i] },
   { type: "fan", patterns: [/fan kit/i] },
@@ -1029,10 +1029,20 @@ function importLinksFromGenerate() {
  * nguoi dung gan tu rack cho tung he thong. Moi port card = 1 soi:
  *   - HBA -> FC -> SAN switch, luon quang.
  *   - NIC -> switch LAN; dong neu mo ta co BASE-T/RJ45, con lai (SFP/SFP28/QSFP) tinh la quang.
- *   - Khung may chu (server_chassis) -> 1 port quan ly phan cung (iLO/iDRAC) / may -> switch quan ly, dong.
- * ponytail: mgmt cua storage/switch/backup trong BOM chua tinh (khong co so port trong BOM) - them tay. */
+ *   - Day quan ly (dong -> switch quan ly), so day/thiet bi theo MGMT_PER_DEVICE: may chu 1 (iLO/iDRAC),
+ *     storage 2 (1/controller), switch 1, backup 1. So thiet bi trong 1 he thong = qty LON NHAT trong
+ *     cac dong cung loai (khong cong don) - vi 1 thiet bi co the co nhieu dong cung loai (vd StoreOnce
+ *     "Base System" + "System Supp"). ponytail: he thong co 2 model storage khac nhau se bi dem thieu. */
+const MGMT_PER_DEVICE = {
+  server_chassis: { n: 1, label: "Máy chủ (iLO/iDRAC)" },
+  storage_array: { n: 2, label: "Storage (2 controller)" },
+  switch: { n: 1, label: "Switch" },
+  backup_device: { n: 1, label: "Thiết bị backup" },
+};
+
 function linksFromBomLines(lines) {
   const acc = {}; // key -> link
+  const devices = {}; // "group|type" -> {group, type, qty} (qty = so thiet bi, lay max)
   const add = (group, kind, desc, media, qty) => {
     if (!qty) return;
     const key = `${group}|${kind}|${media}`;
@@ -1047,7 +1057,14 @@ function linksFromBomLines(lines) {
     else if (l.resolved && l.type === "nic") {
       const media = /base-?t|rj-?45/i.test(text) ? "copper" : "fiber";
       add(group, "lan", `LAN (NIC ${media === "copper" ? "RJ45" : "SFP"}) → switch LAN`, media, l.resolved.ports * qty);
-    } else if (l.type === "server_chassis") add(group, "mgmt", "Quản lý (iLO/iDRAC) → switch quản lý", "copper", qty);
+    } else if (MGMT_PER_DEVICE[l.type]) {
+      const k = `${group}|${l.type}`;
+      devices[k] = { group, type: l.type, qty: Math.max(devices[k] ? devices[k].qty : 0, qty) };
+    }
+  }
+  for (const d of Object.values(devices)) {
+    const m = MGMT_PER_DEVICE[d.type];
+    add(d.group, "mgmt", `Quản lý ${m.label} → switch quản lý`, "copper", d.qty * m.n);
   }
   return Object.values(acc);
 }
@@ -1064,7 +1081,7 @@ function importLinksFromBom() {
     return;
   }
   for (const l of links) addCableLink(l.desc, l.media, l.qty);
-  msg.innerHTML = `<p class="ok-msg">Đã thêm ${links.length} tuyến từ file BOM (mỗi port card = 1 sợi, mỗi máy chủ = 1 dây quản lý) — chọn tủ nguồn/tủ đích cho từng dòng. Dây quản lý của storage/switch chưa có trong BOM, thêm tay nếu cần.</p>`;
+  msg.innerHTML = `<p class="ok-msg">Đã thêm ${links.length} tuyến từ file BOM (mỗi port card = 1 sợi, dây quản lý: máy chủ 1, storage 2, switch 1, backup 1 mỗi thiết bị) — chọn tủ nguồn/tủ đích cho từng dòng.</p>`;
 }
 
 function renderCableLinks() {
@@ -1506,6 +1523,14 @@ function runSelfTest() {
       { row: { group: "HT1", qty: 6, description: "Memory Kit" }, resolved: null, type: "memory" },
     ]);
     assertEq("cable tu BOM: so tuyen", links.length, 5);
+    const l2 = linksFromBomLines([
+      { row: { group: "SAN", qty: 1, description: "MSA 2070 Storage" }, resolved: null, type: "storage_array" },
+      { row: { group: "SW", qty: 2, description: "SN6700B Switch" }, resolved: null, type: "switch" },
+      { row: { group: "BK", qty: 1, description: "StoreOnce Base System" }, resolved: null, type: "backup_device" },
+      { row: { group: "BK", qty: 1, description: "StoreOnce accessory" }, resolved: null, type: "backup_device" },
+    ]).map((l) => [l.desc.split(" — ")[0], l.qty]);
+    assertEq("cable tu BOM: mgmt storage 2/thiet bi, switch 1, backup 1 (khong cong don dong trung)", l2, [["SAN", 2], ["SW", 2], ["BK", 1]]);
+    assertEq("classify: StoreOnce System Supp -> support", classifyComponentType("HPE StoreOnce 3720 24TB System Supp"), "support");
     assertEq("cable tu BOM: HT1 FC = 6 soi quang", links.filter((l) => l.desc.startsWith("HT1") && l.desc.includes("FC")).map((l) => [l.media, l.qty]), [["fiber", 6]]);
     assertEq("cable tu BOM: NIC BASE-T -> dong 12", links.filter((l) => l.media === "copper" && l.desc.includes("RJ45")).map((l) => l.qty), [12]);
     assertEq("cable tu BOM: mgmt = so may chu", links.filter((l) => l.desc.includes("iLO")).map((l) => l.qty), [3]);
