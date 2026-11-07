@@ -1025,6 +1025,48 @@ function importLinksFromGenerate() {
   msg.innerHTML = '<p class="ok-msg">Đã thêm tuyến từ kết quả Tạo nhanh — chọn tủ nguồn/tủ đích cho từng dòng.</p>';
 }
 
+/** Ket qua scan BOM -> danh sach tuyen {desc, media, qty}, gom theo (he thong x loai ket noi) de
+ * nguoi dung gan tu rack cho tung he thong. Moi port card = 1 soi:
+ *   - HBA -> FC -> SAN switch, luon quang.
+ *   - NIC -> switch LAN; dong neu mo ta co BASE-T/RJ45, con lai (SFP/SFP28/QSFP) tinh la quang.
+ *   - Khung may chu (server_chassis) -> 1 port quan ly phan cung (iLO/iDRAC) / may -> switch quan ly, dong.
+ * ponytail: mgmt cua storage/switch/backup trong BOM chua tinh (khong co so port trong BOM) - them tay. */
+function linksFromBomLines(lines) {
+  const acc = {}; // key -> link
+  const add = (group, kind, desc, media, qty) => {
+    if (!qty) return;
+    const key = `${group}|${kind}|${media}`;
+    acc[key] = acc[key] || { desc: (group ? group + " — " : "") + desc, media, qty: 0 };
+    acc[key].qty += qty;
+  };
+  for (const l of lines) {
+    const qty = Number(l.row.qty) || 0;
+    const group = l.row.group || "";
+    const text = `${l.row.description || ""} ${l.row.part_number || ""}`;
+    if (l.resolved && l.type === "hba") add(group, "fc", "FC (HBA) → SAN switch", "fiber", l.resolved.ports * qty);
+    else if (l.resolved && l.type === "nic") {
+      const media = /base-?t|rj-?45/i.test(text) ? "copper" : "fiber";
+      add(group, "lan", `LAN (NIC ${media === "copper" ? "RJ45" : "SFP"}) → switch LAN`, media, l.resolved.ports * qty);
+    } else if (l.type === "server_chassis") add(group, "mgmt", "Quản lý (iLO/iDRAC) → switch quản lý", "copper", qty);
+  }
+  return Object.values(acc);
+}
+
+function importLinksFromBom() {
+  const msg = document.getElementById("cab-msg");
+  if (!lastBomLines.length) {
+    msg.innerHTML = '<p class="err">Chưa có kết quả — vào mục "Đọc file BOM" và đọc file trước.</p>';
+    return;
+  }
+  const links = linksFromBomLines(lastBomLines);
+  if (!links.length) {
+    msg.innerHTML = '<p class="err">File BOM không có card mạng/HBA hay máy chủ nào nhận diện được.</p>';
+    return;
+  }
+  for (const l of links) addCableLink(l.desc, l.media, l.qty);
+  msg.innerHTML = `<p class="ok-msg">Đã thêm ${links.length} tuyến từ file BOM (mỗi port card = 1 sợi, mỗi máy chủ = 1 dây quản lý) — chọn tủ nguồn/tủ đích cho từng dòng. Dây quản lý của storage/switch chưa có trong BOM, thêm tay nếu cần.</p>`;
+}
+
 function renderCableLinks() {
   const names = allRackNames(readCableParams());
   const opt = (sel) => names.map((n) => `<option ${n === sel ? "selected" : ""}>${n}</option>`).join("");
@@ -1451,6 +1493,24 @@ function runSelfTest() {
     out.push(plan.lines[0].warnings.length ? "OK   cable: DAC 15m -> canh bao vuot 5m" : "FAIL cable: DAC 15m khong canh bao");
   } catch (e) {
     out.push(`FAIL cable/rack: ${e.message}`);
+  }
+
+  // Cap tu BOM: gom theo he thong, HBA->quang, NIC BASE-T->dong, NIC SFP->quang, server chassis->1 day mgmt/may
+  try {
+    const links = linksFromBomLines([
+      { row: { group: "HT1", qty: 3, description: "HBA" }, resolved: { ports: 2 }, type: "hba" },
+      { row: { group: "HT1", qty: 3, description: "BCM5719 1Gb 4-port BASE-T" }, resolved: { ports: 4 }, type: "nic" },
+      { row: { group: "HT1", qty: 3, description: "BCM57414 10/25Gb SFP28" }, resolved: { ports: 2 }, type: "nic" },
+      { row: { group: "HT1", qty: 3, description: "DL360 Configure-to-order Server" }, resolved: null, type: "server_chassis" },
+      { row: { group: "HT2", qty: 1, description: "HBA" }, resolved: { ports: 2 }, type: "hba" },
+      { row: { group: "HT1", qty: 6, description: "Memory Kit" }, resolved: null, type: "memory" },
+    ]);
+    assertEq("cable tu BOM: so tuyen", links.length, 5);
+    assertEq("cable tu BOM: HT1 FC = 6 soi quang", links.filter((l) => l.desc.startsWith("HT1") && l.desc.includes("FC")).map((l) => [l.media, l.qty]), [["fiber", 6]]);
+    assertEq("cable tu BOM: NIC BASE-T -> dong 12", links.filter((l) => l.media === "copper" && l.desc.includes("RJ45")).map((l) => l.qty), [12]);
+    assertEq("cable tu BOM: mgmt = so may chu", links.filter((l) => l.desc.includes("iLO")).map((l) => l.qty), [3]);
+  } catch (e) {
+    out.push(`FAIL cable tu BOM: ${e.message}`);
   }
 
   const failCount = out.filter((l) => l.startsWith("FAIL")).length;
