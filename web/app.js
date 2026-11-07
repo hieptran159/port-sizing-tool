@@ -207,6 +207,7 @@ function parseCsvRaw2D(text) {
   let row = [];
   let field = "";
   let inQuotes = false;
+  let line = 0;
   for (let i = 0; i < text.length; i++) {
     const ch = text[i];
     if (inQuotes) {
@@ -218,11 +219,12 @@ function parseCsvRaw2D(text) {
     else if (ch === "\n" || ch === "\r") {
       if (ch === "\r" && text[i + 1] === "\n") i++;
       row.push(field); field = "";
+      row.__rowNum__ = line++; // so dong that trong file (0-based), giong SheetJS - dung de trich dan "dong N"
       if (row.length > 1 || row[0] !== "") rows.push(row);
       row = [];
     } else field += ch;
   }
-  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  if (field !== "" || row.length) { row.push(field); row.__rowNum__ = line; rows.push(row); }
   return rows;
 }
 
@@ -269,10 +271,12 @@ function parseTabularRows2D(rows2D) {
   if (headerIdx === -1) {
     const header = (rows2D[0] || []).map((h) => String(h ?? "").trim().toLowerCase());
     return rows2D.slice(1)
-      .filter((r) => (r || []).some((c) => String(c ?? "").trim() !== ""))
-      .map((r) => {
+      .map((r, i) => [r, (r && r.__rowNum__ != null ? r.__rowNum__ : i + 1) + 1])
+      .filter(([r]) => (r || []).some((c) => String(c ?? "").trim() !== ""))
+      .map(([r, rowNo]) => {
         const obj = Object.fromEntries(header.map((h, i) => [h, String(r[i] ?? "").trim()]));
         obj.qty = Number(obj.qty) || 1;
+        obj.unit_qty = obj.qty; obj.group_qty = 1; obj.row_no = rowNo;
         obj.group = null;
         return obj;
       });
@@ -307,6 +311,9 @@ function parseTabularRows2D(rows2D) {
       part_number: partVal,
       description: descCol !== -1 ? String(row[descCol] ?? "").trim() : "",
       qty: (rowQty || 1) * multiplier,
+      unit_qty: rowQty || 1,
+      group_qty: multiplier,
+      row_no: (row.__rowNum__ != null ? row.__rowNum__ : i) + 1, // so dong trong file Excel/CSV (1-based)
       group: startDateCol !== -1 ? groupLabel : null,
     });
   }
@@ -996,15 +1003,16 @@ function renderRackLayout() {
   renderCableLinks();
 }
 
-function addCableLink(desc = "Tuyến mới", media = "copper", qty = 1) {
+function addCableLink(desc = "Tuyến mới", media = "copper", qty = 1, explain = null) {
   const first = rackName(0, 0);
-  cableLinks.push({ desc, media, src: first, dst: first, qty });
+  cableLinks.push({ desc, media, src: first, dst: first, qty, explain, origQty: qty });
   renderCableLinks();
 }
 
 function updateCableLink(i, field, value) {
   cableLinks[i][field] = field === "qty" ? Math.max(0, Number(value) || 0) : value;
-  renderCablePlan();
+  if (field === "qty" && cableLinks[i].explain) renderCableLinks(); // cap nhat ghi chu "ban da sua so soi"
+  else renderCablePlan();
 }
 
 function deleteCableLink(i) {
@@ -1043,28 +1051,50 @@ const MGMT_PER_DEVICE = {
 function linksFromBomLines(lines) {
   const acc = {}; // key -> link
   const devices = {}; // "group|type" -> {group, type, qty} (qty = so thiet bi, lay max)
-  const add = (group, kind, desc, media, qty) => {
+  // explain: {rule, items:[{row, text, qty, source?}]} - giai thich tung so hang, hien o bang tuyen cap
+  const add = (group, kind, desc, media, qty, rule, item) => {
     if (!qty) return;
     const key = `${group}|${kind}|${media}`;
-    acc[key] = acc[key] || { desc: (group ? group + " — " : "") + desc, media, qty: 0 };
+    acc[key] = acc[key] || { desc: (group ? group + " — " : "") + desc, media, qty: 0, explain: { rule, items: [] } };
     acc[key].qty += qty;
+    acc[key].explain.items.push(item);
   };
+  const where = (r) => `Dòng ${r.row_no ?? "?"}${r.group ? ` (hệ thống "${r.group}")` : ""}: ${[r.part_number, r.description].filter(Boolean).join(" — ")}`;
+  const qtyText = (r, unit) => r.group_qty > 1 ? `${r.qty} ${unit} (${r.unit_qty} ${unit}/hệ thống × ${r.group_qty} hệ thống)` : `${r.qty} ${unit}`;
   for (const l of lines) {
-    const qty = Number(l.row.qty) || 0;
-    const group = l.row.group || "";
-    const text = `${l.row.description || ""} ${l.row.part_number || ""}`;
-    if (l.resolved && l.type === "hba") add(group, "fc", "FC (HBA) → SAN switch", "fiber", l.resolved.ports * qty);
-    else if (l.resolved && l.type === "nic") {
-      const media = /base-?t|rj-?45/i.test(text) ? "copper" : "fiber";
-      add(group, "lan", `LAN (NIC ${media === "copper" ? "RJ45" : "SFP"}) → switch LAN`, media, l.resolved.ports * qty);
+    const r = l.row;
+    const qty = Number(r.qty) || 0;
+    const group = r.group || "";
+    const text = `${r.description || ""} ${r.part_number || ""}`;
+    if (l.resolved && (l.type === "hba" || l.type === "nic")) {
+      const total = l.resolved.ports * qty;
+      const item = { where: where(r), calc: `${l.resolved.ports} port/card × ${qtyText(r, "card")} = ${total} sợi`,
+        source: l.resolved.source, sourceLabel: `số port của "${l.resolved.match}" theo danh mục card` };
+      if (l.type === "hba") {
+        add(group, "fc", "FC (HBA) → SAN switch", "fiber", total, "Mỗi port HBA = 1 sợi quang FC nối lên SAN switch (chia đều 2 fabric A/B).", item);
+      } else {
+        const copper = /base-?t|rj-?45/i.test(text);
+        add(group, "lan", `LAN (NIC ${copper ? "RJ45" : "SFP"}) → switch LAN`, copper ? "copper" : "fiber", total,
+          copper ? "Mỗi port NIC = 1 sợi tới switch LAN. Mô tả card có BASE-T/RJ45 → dây đồng."
+                 : "Mỗi port NIC = 1 sợi tới switch LAN. Mô tả card không có BASE-T/RJ45 (loại SFP/SFP28/QSFP) → tính dây quang.", item);
+      }
     } else if (MGMT_PER_DEVICE[l.type]) {
       const k = `${group}|${l.type}`;
-      devices[k] = { group, type: l.type, qty: Math.max(devices[k] ? devices[k].qty : 0, qty) };
+      const d = (devices[k] = devices[k] || { group, type: l.type, qty: 0, best: null, rows: [] });
+      d.rows.push(r);
+      if (qty > d.qty) { d.qty = qty; d.best = r; }
     }
   }
   for (const d of Object.values(devices)) {
     const m = MGMT_PER_DEVICE[d.type];
-    add(d.group, "mgmt", `Quản lý ${m.label} → switch quản lý`, "copper", d.qty * m.n);
+    const total = d.qty * m.n;
+    const rule = `Mỗi thiết bị loại "${m.label}" cần ${m.n} dây quản lý (đồng) tới switch quản lý. Số thiết bị = số lượng lớn nhất trong các dòng cùng loại của hệ thống (không cộng dồn).`;
+    add(d.group, "mgmt", `Quản lý ${m.label} → switch quản lý`, "copper", total, rule,
+      { where: where(d.best), calc: `${qtyText(d.best, "thiết bị")} × ${m.n} dây quản lý/thiết bị = ${total} sợi` });
+    const link = acc[`${d.group}|mgmt|copper`];
+    for (const r of d.rows) if (r !== d.best && link) {
+      link.explain.items.push({ where: where(r), calc: "bỏ qua — cùng loại thiết bị trong hệ thống này, không cộng dồn" });
+    }
   }
   return Object.values(acc);
 }
@@ -1080,8 +1110,27 @@ function importLinksFromBom() {
     msg.innerHTML = '<p class="err">File BOM không có card mạng/HBA hay máy chủ nào nhận diện được.</p>';
     return;
   }
-  for (const l of links) addCableLink(l.desc, l.media, l.qty);
+  for (const l of links) addCableLink(l.desc, l.media, l.qty, l.explain);
   msg.innerHTML = `<p class="ok-msg">Đã thêm ${links.length} tuyến từ file BOM (mỗi port card = 1 sợi, dây quản lý: máy chủ 1, storage 2, switch 1, backup 1 mỗi thiết bị) — chọn tủ nguồn/tủ đích cho từng dòng.</p>`;
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/** Khoi "Cach tinh" (bam de mo) duoi moi tuyen lay tu BOM: quy tac + tung dong BOM dong gop. */
+function renderCableExplain(l) {
+  const e = l.explain;
+  const counted = e.items.filter((it) => !it.calc.startsWith("bỏ qua"));
+  let html = `<details class="explain"><summary>Cách tính ${l.origQty} sợi (${counted.length} dòng BOM)</summary>
+    <p>${esc(e.rule)}</p><ol>`;
+  for (const it of e.items) {
+    html += `<li><span class="muted">${esc(it.where)}</span><br><b>${esc(it.calc)}</b>`;
+    if (it.source) html += ` — <a href="${esc(it.source)}" target="_blank">${esc(it.sourceLabel)}</a>`;
+    html += "</li>";
+  }
+  html += "</ol>";
+  if (counted.length > 1) html += `<p>Tổng: ${counted.map((it) => it.calc.match(/= (\d+) sợi/)[1]).join(" + ")} = <b>${l.origQty} sợi</b></p>`;
+  if (l.qty !== l.origQty) html += `<p class="warn">Bạn đã sửa số sợi thành ${l.qty} (BOM tính ra ${l.origQty}).</p>`;
+  return html + '<p class="muted">Chưa cộng dự phòng — % dự phòng được cộng ở bảng "Chi tiết từng tuyến".</p></details>';
 }
 
 function renderCableLinks() {
@@ -1097,6 +1146,7 @@ function renderCableLinks() {
       <td><select onchange="updateCableLink(${i},'dst',this.value)">${opt(l.dst)}</select></td>
       <td><input type="number" min="0" value="${l.qty}" onchange="updateCableLink(${i},'qty',this.value)" style="width:5rem"></td>
       <td><button class="danger" onclick="deleteCableLink(${i})">Xoá</button></td></tr>`;
+    if (l.explain) html += `<tr class="explain-row"><td colspan="6">${renderCableExplain(l)}</td></tr>`;
   });
   document.getElementById("cab-links").innerHTML = cableLinks.length ? html + "</table>" : '<p class="muted">Chưa có tuyến nào. Bấm "Lấy số dây từ kết quả Tạo nhanh" hoặc "+ Thêm tuyến".</p>';
   renderCablePlan();
@@ -1256,7 +1306,13 @@ function setBomTypeFilter(types) {
  * bo nho (khong can File thuc). */
 function xlsxBufferToRaw2D(buffer) {
   const wb = XLSX.read(buffer, { type: "array" });
-  return XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: "", blankrows: false });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  // blankrows:true de chi so mang = vi tri dong that (dong trong duoc parseTabularRows2D tu bo qua),
+  // gan __rowNum__ (0-based, tinh tu dong 1 cua sheet) de trich dan "Dong N" khop Excel.
+  const start = ws["!ref"] ? XLSX.utils.decode_range(ws["!ref"]).s.r : 0;
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", blankrows: true });
+  rows.forEach((r, i) => { r.__rowNum__ = start + i; });
+  return rows;
 }
 
 /** Doc file BOM (.csv hoac .xlsx/.xls, chi lay sheet dau) -> array component-row {part_number,
@@ -1530,6 +1586,13 @@ function runSelfTest() {
       { row: { group: "BK", qty: 1, description: "StoreOnce accessory" }, resolved: null, type: "backup_device" },
     ]).map((l) => [l.desc.split(" — ")[0], l.qty]);
     assertEq("cable tu BOM: mgmt storage 2/thiet bi, switch 1, backup 1 (khong cong don dong trung)", l2, [["SAN", 2], ["SW", 2], ["BK", 1]]);
+    const ex = linksFromBomLines([
+      { row: { group: "HT", qty: 6, unit_qty: 2, group_qty: 3, row_no: 12, part_number: "P1", description: "HBA SN1620E" }, resolved: { ports: 2, match: "SN1620E", source: "s" }, type: "hba" },
+      { row: { group: "HT", qty: 3, unit_qty: 1, group_qty: 3, row_no: 15, part_number: "P2", description: "HBA khac" }, resolved: { ports: 2, match: "X", source: "s" }, type: "hba" },
+    ])[0];
+    assertEq("cable tu BOM: explain co 2 dong, tong 18", [ex.qty, ex.explain.items.length], [18, 2]);
+    assertEq("cable tu BOM: explain ghi dong + nhan qty theo he thong", ex.explain.items[0].where.startsWith("Dòng 12") && ex.explain.items[0].calc, "2 port/card × 6 card (2 card/hệ thống × 3 hệ thống) = 12 sợi");
+    assertEq("BOM nhom - so dong trong file (row_no)", parseTabularRows2D([["", "Product #", "Product Description", "Start Date", "Qty"], ["", "G", "", "", 2], ["", "A", "d", "x", 1]])[0].row_no, 3);
     assertEq("classify: StoreOnce System Supp -> support", classifyComponentType("HPE StoreOnce 3720 24TB System Supp"), "support");
     assertEq("cable tu BOM: HT1 FC = 6 soi quang", links.filter((l) => l.desc.startsWith("HT1") && l.desc.includes("FC")).map((l) => [l.media, l.qty]), [["fiber", 6]]);
     assertEq("cable tu BOM: NIC BASE-T -> dong 12", links.filter((l) => l.media === "copper" && l.desc.includes("RJ45")).map((l) => l.qty), [12]);
